@@ -2,14 +2,11 @@ const { Client, LocalAuth, MessageMedia } = require("whatsapp-web.js");
 const express = require("express");
 const QRCode = require("qrcode");
 const fetch = require("node-fetch");
-
 const app = express();
 app.use(express.json({ limit: "20mb" }));
-
 const API_SECRET = process.env.API_SECRET || "changeme";
 const CONVEX_WEBHOOK_URL = process.env.CONVEX_WEBHOOK_URL || "";
 const PORT = process.env.PORT || 8080;
-
 let qrDataUrl = null;
 let isReady = false;
 let waClient = null;
@@ -52,8 +49,10 @@ function startClient() {
     if (msg.fromMe) return;
     try {
       const contact = await msg.getContact();
-      const from = msg.from.replace("@c.us", "");
+      // Use contact.number to get the real phone number (handles @lid accounts)
+      const from = contact.number || msg.from.replace("@c.us", "").replace("@lid", "");
       const profileName = contact.pushname || contact.name || from;
+
       let messageType = "text";
       let text = msg.body || "";
       let mediaBase64 = null;
@@ -76,22 +75,24 @@ function startClient() {
 
       if (!text) return;
 
+      // Send simple format directly — easier to parse on the Convex side
       const payload = {
-        object: "whatsapp_business_account",
-        entry: [{ id: "qr_bridge", changes: [{ field: "messages", value: {
-          messaging_product: "whatsapp",
-          contacts: [{ profile: { name: profileName }, wa_id: from }],
-          messages: [{ from, id: "qr_" + Date.now(), type: messageType,
-            text: messageType === "text" ? { body: text } : undefined,
-            timestamp: String(Math.floor(Date.now() / 1000)),
-          }],
-        }}]}],
+        from,
+        profileName,
+        text,
+        messageType,
+        mimeType,
+        fileName,
+        mediaBase64,
       };
 
       if (CONVEX_WEBHOOK_URL) {
         const r = await fetch(CONVEX_WEBHOOK_URL, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "x-qr-bridge": "true" },
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-secret": API_SECRET,
+          },
           body: JSON.stringify(payload),
         });
         console.log("[WA] forwarded, status:", r.status);
@@ -111,6 +112,13 @@ app.get("/qr", (req, res) => {
   if (isReady) return res.json({ status: "connected" });
   if (!qrDataUrl) return res.json({ status: "loading", message: "Generando QR..." });
   res.send('<!DOCTYPE html><html><head><title>QR</title><meta http-equiv="refresh" content="10"><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f0f0f0;}.card{background:white;border-radius:16px;padding:32px;text-align:center;}h2{color:#128C7E;}</style></head><body><div class="card"><h2>Escanea el QR</h2><p>WhatsApp Business → Dispositivos vinculados → Vincular dispositivo</p><img src="' + qrDataUrl + '" width="280" height="280"/></div></body></html>');
+});
+
+app.get("/qr.json", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  if (isReady) return res.json({ status: "connected" });
+  if (!qrDataUrl) return res.json({ status: "loading" });
+  return res.json({ status: "qr", qrDataUrl });
 });
 
 app.post("/send", requireSecret, async (req, res) => {
