@@ -1,8 +1,8 @@
-FROM node:18-slim
+FROM node:18
 
 # Instalar dependencias de sistema para Chromium
 RUN apt-get update && apt-get install -y \
-    chromium-browser \
+    chromium \
     libglib2.0-0 \
     libfreetype6 \
     libharfbuzz0b \
