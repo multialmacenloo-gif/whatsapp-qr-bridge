@@ -8,7 +8,7 @@ app.use(express.json({ limit: "20mb" }));
 
 const API_SECRET = process.env.API_SECRET || "changeme";
 const CONVEX_WEBHOOK_URL = process.env.CONVEX_WEBHOOK_URL || "";
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
 let qrDataUrl = null;
 let isReady = false;
