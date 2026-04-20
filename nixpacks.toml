@@ -1,5 +1,8 @@
 [phases.setup]
-nixPkgs = ["chromium", "nss", "freetype", "harfbuzz", "ca-certificates"]
+nixPkgs = ["chromium", "nss", "freetype", "harfbuzz", "ca-certificates", "glib", "gtk3", "alsa-lib", "at-spi2-atk", "cups", "libdrm", "libxkbcommon", "xorg.libX11", "xorg.libXcomposite", "xorg.libXdamage", "xorg.libXext", "xorg.libXfixes", "xorg.libXrandr", "mesa"]
 
 [variables]
 PUPPETEER_EXECUTABLE_PATH = "/run/current-system/sw/bin/chromium"
+
+[start]
+cmd = "node server.js"
