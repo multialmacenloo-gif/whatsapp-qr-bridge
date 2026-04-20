@@ -1,2 +1,5 @@
 [phases.setup]
 nixPkgs = ["chromium", "nss", "freetype", "harfbuzz", "ca-certificates"]
+
+[variables]
+PUPPETEER_EXECUTABLE_PATH = "/run/current-system/sw/bin/chromium"
