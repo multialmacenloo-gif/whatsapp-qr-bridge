@@ -1,3 +1,4 @@
+process.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = 'false';
 const { Client, LocalAuth, MessageMedia } = require("whatsapp-web.js");
 const express = require("express");
 const QRCode = require("qrcode");
