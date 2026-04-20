@@ -25,17 +25,7 @@ function startClient() {
     authStrategy: new LocalAuth({ dataPath: "/tmp/wwebjs_auth" }),
     puppeteer: {
       headless: true,
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || "/nix/store/.../bin/chromium",
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-accelerated-2d-canvas",
-        "--no-first-run",
-        "--no-zygote",
-        "--single-process",
-        "--disable-gpu",
-      ],
+      args: ["--no-sandbox","--disable-setuid-sandbox","--disable-dev-shm-usage","--disable-accelerated-2d-canvas","--no-first-run","--no-zygote","--single-process","--disable-gpu"],
     },
   });
 
@@ -77,9 +67,9 @@ function startClient() {
             mediaBase64 = media.data;
             mimeType = media.mimetype;
             fileName = media.filename || null;
-            if (mimeType?.startsWith("image/")) { messageType = "image"; text = text || "📷 Imagen"; }
-            else if (mimeType?.startsWith("audio/")) { messageType = "audio"; text = text || "🎵 Audio"; }
-            else { messageType = "file"; text = text || `📎 ${fileName || "Archivo"}`; }
+            if (mimeType?.startsWith("image/")) { messageType = "image"; text = text || "Imagen"; }
+            else if (mimeType?.startsWith("audio/")) { messageType = "audio"; text = text || "Audio"; }
+            else { messageType = "file"; text = text || fileName || "Archivo"; }
           }
         } catch (e) { console.error("[WA] Media error:", e); }
       }
@@ -91,10 +81,9 @@ function startClient() {
         entry: [{ id: "qr_bridge", changes: [{ field: "messages", value: {
           messaging_product: "whatsapp",
           contacts: [{ profile: { name: profileName }, wa_id: from }],
-          messages: [{ from, id: `qr_${Date.now()}`, type: messageType,
+          messages: [{ from, id: "qr_" + Date.now(), type: messageType,
             text: messageType === "text" ? { body: text } : undefined,
             timestamp: String(Math.floor(Date.now() / 1000)),
-            _mediaBase64: mediaBase64, _mimeType: mimeType, _fileName: fileName, _text: text,
           }],
         }}]}],
       };
@@ -105,9 +94,9 @@ function startClient() {
           headers: { "Content-Type": "application/json", "x-qr-bridge": "true" },
           body: JSON.stringify(payload),
         });
-        console.log("[WA→Convex] status:", r.status);
+        console.log("[WA] forwarded, status:", r.status);
       }
-    } catch (e) { console.error("[WA] message handler error:", e); }
+    } catch (e) { console.error("[WA] error:", e); }
   });
 
   client.initialize();
@@ -121,19 +110,15 @@ app.get("/health", (req, res) => res.json({ status: "ok", waReady: isReady }));
 app.get("/qr", (req, res) => {
   if (isReady) return res.json({ status: "connected" });
   if (!qrDataUrl) return res.json({ status: "loading", message: "Generando QR..." });
-  res.send(`<!DOCTYPE html><html><head><title>QR</title><meta http-equiv="refresh" content="10">
-    <style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f0f0f0;}
-    .card{background:white;border-radius:16px;padding:32px;text-align:center;}h2{color:#128C7E;}</style></head>
-    <body><div class="card"><h2>Escanea el QR</h2><p>WhatsApp Business → Dispositivos vinculados → Vincular dispositivo</p>
-    <img src="${qrDataUrl}" width="280" height="280"/></div></body></html>`);
+  res.send('<!DOCTYPE html><html><head><title>QR</title><meta http-equiv="refresh" content="10"><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f0f0f0;}.card{background:white;border-radius:16px;padding:32px;text-align:center;}h2{color:#128C7E;}</style></head><body><div class="card"><h2>Escanea el QR</h2><p>WhatsApp Business → Dispositivos vinculados → Vincular dispositivo</p><img src="' + qrDataUrl + '" width="280" height="280"/></div></body></html>');
 });
 
 app.post("/send", requireSecret, async (req, res) => {
   if (!isReady || !waClient) return res.status(503).json({ error: "WhatsApp not connected" });
   const { to, text, mediaBase64, mimeType, fileName } = req.body;
-  if (!to) return res.status(400).json({ error: "Missing 'to'" });
+  if (!to) return res.status(400).json({ error: "Missing to" });
   try {
-    const chatId = `${to.replace(/\D/g, "")}@c.us`;
+    const chatId = to.replace(/\D/g, "") + "@c.us";
     if (mediaBase64 && mimeType) {
       const media = new MessageMedia(mimeType, mediaBase64, fileName || "file");
       await waClient.sendMessage(chatId, media, { caption: text });
@@ -150,4 +135,4 @@ app.post("/disconnect", requireSecret, async (req, res) => {
   res.json({ success: true });
 });
 
-app.listen(PORT, () => console.log(`[Server] Listening on port ${PORT}`));
+app.listen(PORT, () => console.log("[Server] Listening on port " + PORT));
