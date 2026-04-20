@@ -1,4 +1,4 @@
-const { Client, LocalAuth, MessageMedia } = require("whatsapp-web.js");
+const { Client, LocalAuth, MessageMedia, Buttons, List } = require("whatsapp-web.js");
 const express = require("express");
 const QRCode = require("qrcode");
 const fetch = require("node-fetch");
@@ -49,7 +49,6 @@ function startClient() {
     if (msg.fromMe) return;
     try {
       const contact = await msg.getContact();
-      // Use contact.number to get the real phone number (handles @lid accounts)
       const from = contact.number || msg.from.replace("@c.us", "").replace("@lid", "");
       const profileName = contact.pushname || contact.name || from;
 
@@ -75,24 +74,12 @@ function startClient() {
 
       if (!text) return;
 
-      // Send simple format directly — easier to parse on the Convex side
-      const payload = {
-        from,
-        profileName,
-        text,
-        messageType,
-        mimeType,
-        fileName,
-        mediaBase64,
-      };
+      const payload = { from, profileName, text, messageType, mimeType, fileName, mediaBase64 };
 
       if (CONVEX_WEBHOOK_URL) {
         const r = await fetch(CONVEX_WEBHOOK_URL, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-secret": API_SECRET,
-          },
+          headers: { "Content-Type": "application/json", "x-api-secret": API_SECRET },
           body: JSON.stringify(payload),
         });
         console.log("[WA] forwarded, status:", r.status);
@@ -123,18 +110,30 @@ app.get("/qr.json", (req, res) => {
 
 app.post("/send", requireSecret, async (req, res) => {
   if (!isReady || !waClient) return res.status(503).json({ error: "WhatsApp not connected" });
-  const { to, text, mediaBase64, mimeType, fileName } = req.body;
+  const { to, text, mediaBase64, mimeType, fileName, buttons } = req.body;
   if (!to) return res.status(400).json({ error: "Missing to" });
   try {
     const chatId = to.replace(/\D/g, "") + "@c.us";
-    if (mediaBase64 && mimeType) {
+    if (buttons && buttons.length > 0) {
+      // Send as real WhatsApp buttons (max 3)
+      const btns = new Buttons(
+        text || "",
+        buttons.slice(0, 3).map(b => ({ body: b.label })),
+        "", ""
+      );
+      await waClient.sendMessage(chatId, btns);
+      console.log("[WA] Buttons sent to:", chatId);
+    } else if (mediaBase64 && mimeType) {
       const media = new MessageMedia(mimeType, mediaBase64, fileName || "file");
       await waClient.sendMessage(chatId, media, { caption: text });
     } else {
       await waClient.sendMessage(chatId, text || "");
     }
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: String(e) }); }
+  } catch (e) {
+    console.error("[WA] Send error:", e);
+    res.status(500).json({ error: String(e) });
+  }
 });
 
 app.post("/disconnect", requireSecret, async (req, res) => {
